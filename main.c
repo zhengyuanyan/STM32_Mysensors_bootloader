@@ -287,9 +287,10 @@ void eraseOtaPartition() {
 
     for (addr = start; addr < end; addr += FLASH_SECTOR_SIZE) {
 
+        setWriteEnable(true);
         // 发起扇区擦除（你的驱动接口名可能不同，保持原有 flashErasePage 或替换）
         eraseSector(addr); // 若 flashErasePage 不是用于外部 flash 的扇区擦除，请替换为正确的擦除函数
-
+        setWriteEnable(false);
         // 等待擦除完成并带超时保护
         if (flash_wait_ready(ERASE_TIMEOUT_LOOPS)) {
 #ifdef USE_USART
