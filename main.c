@@ -351,6 +351,14 @@ bool tryLoadFirmware(uint32_t flashAddr) {
 #ifdef USE_USART
         send_string_USART("写入完成！\n");
 #endif
+
+   if (CheckFlashImage(RECOVERY_FLASH) == 0) {
+         
+        eraseOtaPartition();
+#ifdef USE_USART
+        send_string_USART("Recovery分区有固件, 擦除 OTA 分区...\n");
+#endif
+    }
         return true;
     }
     return false;
