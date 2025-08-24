@@ -29,7 +29,7 @@
 #include "cortexm3_macro.h"
 #include "common.h"
 
-//#define USE_USART           // В основном используется для целей отладки
+#define USE_USART           // В основном используется для целей отладки
 #define SPI_SPEED 0x00      // Скорость SPI порта
 #define SS_PIN_PA4 // SS_PIN_PA4
 //#define USE_HW_CRC        // TODO: А надо ли это в загрузчике?
@@ -524,6 +524,7 @@ typedef struct pwr_reg_map {
 
 //void setPin(u32 bank, u8 pin);
 //void resetPin(u32 bank, u8 pin);
+uint8_t transfer(uint8_t byte);
 void gpio_write_bit(u32 bank, u8 pin, u8 val);
 unsigned int crMask(int pin);
 
@@ -543,15 +544,17 @@ void setupSPI (void);
 #ifdef USE_HW_CRC
     void CRC_init(void);
 #endif // USE_HW_CRC
-uint8_t CheckFlashImage(void);
+uint8_t CheckFlashImage(uint32_t addr);
 void send_string_USART(char*);
 void Hex2Ascii (uint8_t);
 bool readButtonState(void);
 uint16_t fast_read (uint32_t, char *, uint16_t);
+uint32_t flash_read_id(void);
 bool busy(void);
 void erase64kBlock(uint32_t);
 void setWriteEnable(bool);
-
+void eraseSector(uint32_t addr_start);
+void writePage(uint32_t addr_start,uint8_t *buf,  uint16_t len);
 
 bool checkUserCode(u32 usrAddr);
 void jumpToUser(u32 usrAddr);

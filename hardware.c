@@ -35,8 +35,32 @@
 //int wTransferSize = 0x400;
 
 #ifdef USE_USART
-    char *myMessages[] = {"Bootloader started.\n", "SPI flash found!\n", "SPI flash not found!\n", "New firmware found!\n", 
-    "New firmware not found!\n", "Started main program...\n", "Firmware started...\n", "Reboot...\n", "Firmaware complite!\n", "Firmaware flashing error!\n"};
+    // char *myMessages[] = {"Bootloader started.\n", "SPI flash found!\n", "SPI flash not found!\n", "New firmware found!\n", 
+    // "New firmware not found!\n", "Started main program...\n", "Firmware started...\n", "Reboot...\n", "Firmaware complite!\n", "Firmaware flashing error!\n"};
+
+// // ----------------- 中文提示信息数组 -----------------
+// char *myMessages[] = {
+//     "Bootloader 启动。\n",              // 0 //
+//     "检测到 SPI Flash! \n",             // 1
+//     "未检测到 SPI Flash! \n",           // 2
+//     "发现新固件！\n",                  // 3
+//     "未发现新固件！\n",                // 4
+//     "启动主程序...\n",                  // 5
+//     "固件启动完成。\n",                  // 6
+//     "系统重启...\n",                    // 7
+//     "固件烧录完成！\n",                 // 8
+//     "固件烧录出错！\n",                 // 9
+//     "写入Recovery分区固件\n",          // 10
+//     "OTA 固件有效\n", // 11
+//     "OTA 写入完成，准备启动用户程序\n", // 12
+//     "OTA 写入失败，准备回退 Recovery\n", // 13
+//     "Recovery 固件有效，写入内部 Flash\n", // 14
+//     "Recovery 写入完成，准备启动用户程序\n", // 15
+//     "未检测到有效 OTA 和 Recovery 固件，重启系统\n", // 16
+//     "未检测到 OTA 和 Recovery, 尝试内部 Flash\n"  //17
+
+// };
+
 
  void Hex2Ascii (uint8_t numb) {
     uint8_t number = numb;
@@ -81,40 +105,60 @@ uint8_t transfer(uint8_t byte)
         return (uint8_t)SPI1->DR; // "... and read the last received data."
     }
 
-bool checkPartNo(uint16_t _partno)
+uint32_t flash_read_id(void) {
+    uint8_t id[3];
+
+    select();
+    transfer(R_JEDEC_ID);   // 0x9F
+    id[0] = transfer(0x00); // Manufacturer ID
+    id[1] = transfer(0x00); // Memory Type
+    id[2] = transfer(0x00); // Capacity
+    deselect();
+
+    return ((uint32_t)id[0] << 16) | ((uint32_t)id[1] << 8) | id[2];
+}
+
+bool checkPartNo(uint32_t _partno)
  {
-  uint8_t manuf;
-  uint16_t id;
+//   uint8_t manuf;
+//   uint16_t id;
   
-  select();
-  transfer(R_JEDEC_ID);
-  manuf = transfer(0x00);
-  id = transfer(0x00) << 8;
-  id |= transfer(0x00);
-  deselect();
+//   select();
+//   transfer(R_JEDEC_ID);
+//   manuf = transfer(0x00);
+//   id = transfer(0x00) << 8;
+//   id |= transfer(0x00);
+//   deselect();
 
-  if(manuf != WINBOND_MANUF)
-    return false;
+//   if(manuf != WINBOND_MANUF)
+//     return false;
 
-  if(id != _partno)
-    return false;
+//   if(id != _partno)
+//     return false;
   
-  return true;
+//   return true;
+    uint32_t id = flash_read_id();
+
+    if (id != _partno) {
+        return false;
+    }
+    return true;
   }
 
-bool begin(uint16_t _partno)
+bool begin(uint32_t _partno)
     {
     select();
     transfer(RELEASE);
     deselect();
     uint16_t volatile i;
-    for (i=0; i<30; i++); //TODO: Потом отрихтовать задержку
+    for (i=0; i<1000; i++); //TODO: Потом отрихтовать задержку
     //  delay_us(5);//>3us
     
-    if(!checkPartNo(_partno))
-        return false;
+    // if(!checkPartNo(_partno))
+    //     return false;
     
-    return true;
+    // return true;
+    return checkPartNo(_partno);
     }
 
 void end()
@@ -196,19 +240,27 @@ uint16_t fast_read (uint32_t addr,char *buf,uint16_t n)
   return n;
  }
 
-void writePage(uint32_t addr_start,uint8_t *buf)
+void writePage(uint32_t addr_start,uint8_t *buf,  uint16_t len)
     {
+    uint32_t waitLoops = 2000;
     select();
     transfer(PAGE_PGM);
     transfer(addr_start>>16);
     transfer(addr_start>>8);
-    transfer(0x00);
-    uint8_t i=0;
-    do {
+    transfer(addr_start & 0xFF);
+    uint16_t i=0;
+    for (i = 0; i < len; i++) {
         transfer(buf[i]);
-        i++;
-    }while(i!=0);
+    }
     deselect();
+    while(busy() && waitLoops--) {
+ 
+    }
+    if(waitLoops == 0) {
+#ifdef USE_USART
+        send_string_USART("writePage 超时!\n");
+#endif
+    }
     }
 
 void eraseSector(uint32_t addr_start)
@@ -356,44 +408,79 @@ uint16_t Spi_Write_Data(uint8_t data)
  }
  #endif // USE_HW_CRC
 
-uint8_t CheckFlashImage() {
-    if (!begin(flash_id())) {
+uint8_t CheckFlashImage(uint32_t addr) {
+    uint32_t id = flash_read_id();  // 读取 JEDEC ID
+    uint32_t flash_size = 0;
 
-    #ifdef USE_USART
-        send_string_USART(myMessages[2]);
-    #endif // USE_USART  
-
-    return 1; // Не найдена флешка
-    }
-
-    #ifdef USE_USART
-        send_string_USART(myMessages[1]);
-    #endif // USE_USART  
-      
-      //fast_read(FIRMWARE_START_ADDRESS,&mybuff[0],0x10);
-      fast_read(0,&mybuff[0],0x10);
-
-
-      if (mybuff[0]==0x46 && mybuff[1]==0x4c && mybuff[2]==0x58 && mybuff[3]==0x49 && mybuff[4]==0x4d && mybuff[5]==0x47 && mybuff[6]==0x3a)
-	{
-        // Сигнатура прошивки найдена
+    // 根据 JEDEC ID 判断型号
+    if (id == 0x202013) {
+        flash_size = 512 * 1024;  // M25P40
         #ifdef USE_USART
-            send_string_USART(myMessages[3]);
-        #endif // USE_USART  
-    
+        send_string_USART("Detected Flash: M25P40 (512KB)\n");
+        #endif
+    } else if (id == 0xEF3013) {
+        flash_size = 512 * 1024;  // 25X40
+        #ifdef USE_USART
+        send_string_USART("Detected Flash: 25X40 (512KB)\n");
+        #endif
+    } else if (id == 0xEF4016) {
+        flash_size = 4 * 1024 * 1024;  // W25Q32
+        #ifdef USE_USART
+        send_string_USART("Detected Flash: W25Q32 (4MB)\n");
+        #endif
+    } else if (id == 0xEF4017) {
+        flash_size = 8 * 1024 * 1024;  // W25Q64
+        #ifdef USE_USART
+        send_string_USART("Detected Flash: W25Q64 (8MB)\n");
+        #endif
+    } else if (id == 0xEF4018) {
+        flash_size = 16 * 1024 * 1024; // W25Q128
+        #ifdef USE_USART
+        send_string_USART("Detected Flash: W25Q128 (16MB)\n");
+        #endif
     } else {
-        //  // Сигнатура прошивки не найдена
         #ifdef USE_USART
-            send_string_USART(myMessages[4]);
-        #endif // USE_USART  
-
-    return 2;
+        send_string_USART("Unknown SPI Flash!\n");
+        #endif
+        return 1; // 不支持的芯片
     }
-    // Всё хорошо, контрольные суммы совпадают
-    // Можно обновляться
-    return 0;
- } 
 
+    // 读出头部
+    fast_read(addr, &mybuff[0], 0x10);
+
+    // 检查 "FLXIMG:" 签名
+    if (mybuff[0]=='F' && mybuff[1]=='L' && mybuff[2]=='X' && 
+        mybuff[3]=='I' && mybuff[4]=='M' && mybuff[5]=='G' && 
+        mybuff[6]==':') 
+    {
+        #ifdef USE_USART
+        send_string_USART("发现新固件头！\n");
+        #endif
+    } else {
+        #ifdef USE_USART
+        send_string_USART("未发现新固件！\n");
+        #endif
+        return 2;
+    }
+
+    // ===============================
+    // 新增：检查完成标志 "OKAY"
+    // ===============================
+    uint8_t marker[4];
+    fast_read(addr + FIRMWARE_START_OFFSET, marker, sizeof(marker));
+
+    if (marker[0]=='O' && marker[1]=='K' && marker[2]=='A' && marker[3]=='Y') {
+        #ifdef USE_USART
+        send_string_USART("固件完整，准备升级！\n");
+        #endif
+        return 0;   // 固件 OK
+    } else {
+        #ifdef USE_USART
+        send_string_USART("固件头存在，未发现完成标志！回退 Recovery。\n");
+        #endif
+        return 3;   // 固件未完成
+    }
+}
 
 void gpio_write_bit(u32 bank, u8 pin, u8 val) {
     val = !val;          // "set" bits are lower than "reset" bits

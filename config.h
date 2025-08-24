@@ -82,6 +82,7 @@ int wTransferSize;
     #define BUTTON_PRESSED_STATE 1
 */
 
+
 #if defined TARGET_MAPLE_MINI
 
     #define HAS_MAPLE_HARDWARE 1

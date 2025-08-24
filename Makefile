@@ -23,6 +23,8 @@ DEBUG =
 
 INCDIRS = ./$(ST_LIB) ./$(ST_USB)
 
+# CFLAGS += -std=gnu99
+
 CFLAGS = $(DEBUG)
 CFLAGS += -O$(OPT)
 CFLAGS += -ffunction-sections -fdata-sections
